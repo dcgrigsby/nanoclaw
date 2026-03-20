@@ -24,6 +24,14 @@ export const PROXY_BIND_HOST =
   process.env.CREDENTIAL_PROXY_HOST || detectProxyBindHost();
 
 function detectProxyBindHost(): string {
+  // Apple Container uses a real VM network — containers reach the host via
+  // the bridge gateway, not loopback. Bind to 0.0.0.0 so the proxy is
+  // reachable from the VM.
+  if (os.platform() === 'darwin' && CONTAINER_RUNTIME_BIN === 'container') {
+    return '0.0.0.0';
+  }
+
+  // Docker Desktop (macOS): the VM routes host.docker.internal to loopback.
   if (os.platform() === 'darwin') return '127.0.0.1';
 
   // WSL uses Docker Desktop (same VM routing as macOS) — loopback is correct.
@@ -49,9 +57,47 @@ export function hostGatewayArgs(): string[] {
   return [];
 }
 
+/**
+ * The hostname containers use to reach the credential proxy.
+ * Apple Container doesn't support --add-host or host.docker.internal,
+ * so we detect the gateway IP at startup and use it directly.
+ */
+let _cachedGatewayHost: string | null = null;
+
+export function containerProxyHost(): string {
+  if (CONTAINER_RUNTIME_BIN === 'container') {
+    if (!_cachedGatewayHost) {
+      _cachedGatewayHost = detectAppleContainerGateway() || CONTAINER_HOST_GATEWAY;
+      logger.info({ gatewayHost: _cachedGatewayHost }, 'Apple Container gateway detected');
+    }
+    return _cachedGatewayHost;
+  }
+  return CONTAINER_HOST_GATEWAY;
+}
+
+/** Detect the gateway IP for Apple Container's bridge network. */
+function detectAppleContainerGateway(): string | null {
+  try {
+    const output = execSync(
+      `${CONTAINER_RUNTIME_BIN} run --rm --entrypoint /bin/cat nanoclaw-agent:latest /etc/resolv.conf`,
+      { stdio: 'pipe', encoding: 'utf-8', timeout: 15000 },
+    );
+    const match = output.match(/nameserver\s+(\d+\.\d+\.\d+\.\d+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Returns CLI args for a readonly bind mount. */
-export function readonlyMountArgs(hostPath: string, containerPath: string): string[] {
-  return ['--mount', `type=bind,source=${hostPath},target=${containerPath},readonly`];
+export function readonlyMountArgs(
+  hostPath: string,
+  containerPath: string,
+): string[] {
+  return [
+    '--mount',
+    `type=bind,source=${hostPath},target=${containerPath},readonly`,
+  ];
 }
 
 /** Returns the shell command to stop a container by name. */
@@ -67,7 +113,10 @@ export function ensureContainerRuntimeRunning(): void {
   } catch {
     logger.info('Starting container runtime...');
     try {
-      execSync(`${CONTAINER_RUNTIME_BIN} system start`, { stdio: 'pipe', timeout: 30000 });
+      execSync(`${CONTAINER_RUNTIME_BIN} system start`, {
+        stdio: 'pipe',
+        timeout: 30000,
+      });
       logger.info('Container runtime started');
     } catch (err) {
       logger.error({ err }, 'Failed to start container runtime');
@@ -107,17 +156,26 @@ export function cleanupOrphans(): void {
       stdio: ['pipe', 'pipe', 'pipe'],
       encoding: 'utf-8',
     });
-    const containers: { status: string; configuration: { id: string } }[] = JSON.parse(output || '[]');
+    const containers: { status: string; configuration: { id: string } }[] =
+      JSON.parse(output || '[]');
     const orphans = containers
-      .filter((c) => c.status === 'running' && c.configuration.id.startsWith('nanoclaw-'))
+      .filter(
+        (c) =>
+          c.status === 'running' && c.configuration.id.startsWith('nanoclaw-'),
+      )
       .map((c) => c.configuration.id);
     for (const name of orphans) {
       try {
         execSync(stopContainer(name), { stdio: 'pipe' });
-      } catch { /* already stopped */ }
+      } catch {
+        /* already stopped */
+      }
     }
     if (orphans.length > 0) {
-      logger.info({ count: orphans.length, names: orphans }, 'Stopped orphaned containers');
+      logger.info(
+        { count: orphans.length, names: orphans },
+        'Stopped orphaned containers',
+      );
     }
   } catch (err) {
     logger.warn({ err }, 'Failed to clean up orphaned containers');
