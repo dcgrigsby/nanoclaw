@@ -67,8 +67,12 @@ let _cachedGatewayHost: string | null = null;
 export function containerProxyHost(): string {
   if (CONTAINER_RUNTIME_BIN === 'container') {
     if (!_cachedGatewayHost) {
-      _cachedGatewayHost = detectAppleContainerGateway() || CONTAINER_HOST_GATEWAY;
-      logger.info({ gatewayHost: _cachedGatewayHost }, 'Apple Container gateway detected');
+      _cachedGatewayHost =
+        detectAppleContainerGateway() || CONTAINER_HOST_GATEWAY;
+      logger.info(
+        { gatewayHost: _cachedGatewayHost },
+        'Apple Container gateway detected',
+      );
     }
     return _cachedGatewayHost;
   }
