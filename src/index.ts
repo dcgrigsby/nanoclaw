@@ -27,6 +27,7 @@ import {
   PROXY_BIND_HOST,
 } from './container-runtime.js';
 import {
+  deleteSession,
   getAllChats,
   getAllRegisteredGroups,
   getAllSessions,
@@ -545,6 +546,32 @@ async function main(): Promise<void> {
         handleRemoteControl(trimmed, chatJid, msg).catch((err) =>
           logger.error({ err, chatJid }, 'Remote control command error'),
         );
+        return;
+      }
+
+      // Session reset command — intercept before storage
+      if (trimmed === '!reset') {
+        const group = registeredGroups[chatJid];
+        if (group) {
+          queue.killGroup(chatJid);
+          delete sessions[group.folder];
+          deleteSession(group.folder);
+          const channel = findChannel(channels, chatJid);
+          if (channel) {
+            channel
+              .sendMessage(chatJid, 'Session reset.')
+              .catch((err: unknown) =>
+                logger.error(
+                  { err, chatJid },
+                  'Failed to send reset confirmation',
+                ),
+              );
+          }
+          logger.info(
+            { chatJid, group: group.name },
+            'Session reset via !reset',
+          );
+        }
         return;
       }
 

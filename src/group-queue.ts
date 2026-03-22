@@ -154,6 +154,16 @@ export class GroupQueue {
   }
 
   /**
+   * Kill the active container for a group. Returns true if a process was killed.
+   */
+  killGroup(groupJid: string): boolean {
+    const state = this.groups.get(groupJid);
+    if (!state?.process || state.process.killed) return false;
+    state.process.kill('SIGTERM');
+    return true;
+  }
+
+  /**
    * Send a follow-up message to the active container via IPC file.
    * Returns true if the message was written, false if no active container.
    */
