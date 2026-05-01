@@ -219,6 +219,23 @@ Everything else (new capabilities, OS compatibility, hardware support, enhanceme
 
 This keeps the base system minimal and lets every user customize their installation without inheriting features they don't want.
 
+## Uninstall
+
+```bash
+# macOS (launchd)
+launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+rm ~/Library/LaunchAgents/com.nanoclaw.plist
+
+# Apple Container artifacts (if used)
+container delete <agent-container-id>
+container image delete nanoclaw-agent:latest
+
+# Project directory
+rm -rf nanoclaw
+```
+
+To reinstall later: `git clone`, `npm install`, `./container/build.sh`, then `/setup` to re-auth channels. Per-group memory and message history are not preserved.
+
 ## Community
 
 Questions? Ideas? [Join the Discord](https://discord.gg/VDdww8qS42).
