@@ -33,6 +33,22 @@ describe('extractSessionCommand', () => {
   it('is case-sensitive for the command', () => {
     expect(extractSessionCommand('/Compact', trigger)).toBeNull();
   });
+
+  it('detects bare !compact', () => {
+    expect(extractSessionCommand('!compact', trigger)).toBe('/compact');
+  });
+
+  it('detects !compact with trigger prefix', () => {
+    expect(extractSessionCommand('@Andy !compact', trigger)).toBe('/compact');
+  });
+
+  it('handles !compact with whitespace', () => {
+    expect(extractSessionCommand('  !compact  ', trigger)).toBe('/compact');
+  });
+
+  it('rejects !compact with extra text', () => {
+    expect(extractSessionCommand('!compact now', trigger)).toBeNull();
+  });
 });
 
 describe('isSessionCommandAllowed', () => {

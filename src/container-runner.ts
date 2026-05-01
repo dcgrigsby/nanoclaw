@@ -231,6 +231,9 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
+  // Expose the host gateway so container skills can reach host-side services
+  args.push('-e', `OMNIFOCAL_HOST=http://${containerProxyHost()}:7890`);
+
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 
